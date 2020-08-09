@@ -6,7 +6,7 @@ import admin = require("firebase-admin");
 
 let userInfo: any;
 
-exports.newEntry = functions.https.onCall((data, context) => {
+exports.newEntry = functions.https.onCall(async (data, context) => {
     console.log("Start newEntry");
     const language: string = data.language;
     const topic: string = data.topic;
@@ -22,14 +22,29 @@ exports.newEntry = functions.https.onCall((data, context) => {
             name: context.auth.token.name,
             email: context.auth.token.email,
         };
-        const ref = admin.database().ref("Responses").child(language).child(topic).child(userInfo.uid);
-        /*ref.once("value", function (snapshot) {
-            if (snapshot.numChildren() > 99) {
-                snapshot.
-            }
+        const ref = admin.database().ref("Responses").child(language).child(topic);
+        const parentSnapshot = await ref.orderByKey().once("value")/*, function (snapshot) {
+            console.log("Counter :",snapshot.numChildren().toString());
+            /!*if (snapshot.numChildren() > 99) {
+
+            }*!/
         })*/
-        //TODO Create system to keep children under a 100
-        return ref.set({"name": "Someone else", "text": entry, "vote_count": 0}).catch((er: any) => {
+        if (parentSnapshot.numChildren() > 3) {
+            let childCount = 0;
+            const updates = {};
+            parentSnapshot.forEach((child) => {
+                if (++childCount <= parentSnapshot.numChildren() - 3) {
+                    // @ts-ignore
+                    updates[child.key] = null;
+                }
+            });
+            await ref.update(updates);
+        }
+        return ref.push({
+            "name": userInfo.uid,
+            "text": entry,
+            "vote_count": 0
+        }).catch((er: any) => {
             throwError(er.title, er.message);
         });
     }

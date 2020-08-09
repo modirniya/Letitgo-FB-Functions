@@ -13,6 +13,7 @@ exports.newReport = functions.https.onCall((data, context) => {
     const category: string = data.category;
     const target_uid: string = data.target_uid;
 
+
     if (!context.auth) {
         throwError(
             "failed-precondition",
@@ -27,12 +28,19 @@ exports.newReport = functions.https.onCall((data, context) => {
 
         const docRef = admin.firestore().collection('users').doc(target_uid).collection("reports").doc(category);
         const ref = admin.database().ref("Responses").child(language).child(topic).child(target_uid).child("reports");
+
         ref.child(userInfo.uid).once("value", async snapshot => {
             if (!snapshot.exists()) {
                 console.log(userInfo.name, language, topic, target_uid, category)
                 checkReportsBranch(docRef);
                 await ref.child(userInfo.uid).set(category);
-                const result : any =  intIncrementer(ref.child("count"));
+                let result: any = await intIncrementer(ref.child("count"));
+                result = extractNumberFromPromise(result.snapshot);
+                console.log("Result ", result);
+                if (result >= 5) {
+                    await ref.parent?.set(null)
+                    console.log("Comment been deleted");
+                }
                 return result;
             }
             return
@@ -65,3 +73,11 @@ exports.newReport = functions.https.onCall((data, context) => {
         });
     }
 });
+
+function extractNumberFromPromise(index: any) {
+    return parseInt(extractStringFromPromise(index))
+}
+
+function extractStringFromPromise(input: any) {
+    return JSON.stringify(input).replace(/\"/g, "")
+}
